@@ -1,4 +1,9 @@
-package PACKAGE_NAME;
+public class InvalidProgramException extends Exception {
+    public InvalidProgramException() {
+        super("Invalid program format or syntax.");
+    }
 
-public class InvalidProgramException {
+    public InvalidProgramException(String message) {
+        super(message);
+    }
 }
