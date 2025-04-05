@@ -6,6 +6,9 @@ public class Program {
     private List<String> codeSegment = new ArrayList<>();
     private String name = "";
 
+
+
+
     public void setName(String name) {
         this.name = name.trim();
     }
@@ -27,5 +30,13 @@ public class Program {
 
     public List<String> getDataSegment() {
         return dataSegment;
+    }
+
+    public void setDataSegment(List<String> dataSegment) {
+        this.dataSegment = dataSegment;
+    }
+
+    public void setCodeSegment(List<String> codeSegment) {
+        this.codeSegment = codeSegment;
     }
 }
