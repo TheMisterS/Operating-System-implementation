@@ -1,9 +1,9 @@
 package RealMemory;
 
-public class Byte {
+public class Word {
     private String value;
 
-    public Byte() {
+    public Word() {
         this.value = "0000"; // default 4-char word
     }
 

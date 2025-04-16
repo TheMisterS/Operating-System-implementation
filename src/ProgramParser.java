@@ -4,14 +4,14 @@ import java.nio.file.Files;
 import java.util.*;
 
 public class ProgramParser {
-
+    static boolean DEBUGGING = true;
     private static final Set<String> SIMPLE_INSTRUCTIONS = Set.of(
             "ADD", "SUB", "MUL", "DIV", "CMP",
             "AND", "OR", "XOR", "XCG",
             "MOV", "HALT"
     );
 
-    public static void parseFlash(File flash, RealMachine realMachine) throws IOException {
+    public static void parseFlash(File flash, RealMachine realMachine, ChannelManager channelManager) throws IOException {
         List<String> lines = Files.readAllLines(flash.toPath());
         int i = 0;
 
@@ -35,12 +35,16 @@ public class ProgramParser {
                 List<String> programLines = lines.subList(start, end + 1);
                 Program program = parseProgramBlock(programLines, realMachine);
                 if (program != null) {
-                    if (realMachine.programExists(program.getName())) {
-                        realMachine.overwriteProgram(program);
-                        System.out.println("[INFO] Overwrote program: " + program.getName());
+                    if (channelManager.programExists(program.getName())) {
+                        channelManager.overwriteProgram(program);
+                        if (DEBUGGING) {
+                            System.out.println("[INFO] Overwrote program: " + program.getName());
+                        }
                     } else {
-                        realMachine.saveNewProgram(program);
-                        System.out.println("[INFO] Saved program: " + program.getName());
+                        channelManager.saveNewProgram(program);
+                        if (DEBUGGING) {
+                            System.out.println("[INFO] Saved program: " + program.getName());
+                        }
                     }
                 }
 
@@ -51,17 +55,21 @@ public class ProgramParser {
         }
     }
 
-    private static Program parseProgramBlock(List<String> lines, RealMachine realMachine) {
+    public static Program parseProgramBlock(List<String> lines, RealMachine realMachine) {
         if (lines.size() < 5 || !lines.get(0).equals("$FIL")) {
             realMachine.setSI(5);
-            System.out.println("[ERROR] Program must start with $FIL header.");
+            if (DEBUGGING) {
+                System.out.println("[ERROR] Program must start with $FIL header.");
+            }
             return null;
         }
 
         String programName = lines.get(1).trim();
         if (programName.isEmpty()) {
             realMachine.setSI(5);
-            System.out.println("[ERROR] Program name is missing.");
+            if (DEBUGGING) {
+                System.out.println("[ERROR] Program name is missing.");
+            }
             return null;
         }
 
@@ -96,7 +104,9 @@ public class ProgramParser {
             if (inCode) {
                 if (!isValidInstruction(line)) {
                     realMachine.setSI(5);
-                    System.out.println("[ERROR] Invalid instruction: " + line);
+                    if (DEBUGGING) {
+                        System.out.println("[ERROR] Invalid instruction: " + line);
+                    }
                     return null;
                 }
                 program.addCode(line);
@@ -105,13 +115,17 @@ public class ProgramParser {
 
         if (!foundData || !foundCode) {
             realMachine.setSI(5);
-            System.out.println("[ERROR] Missing DATS or CODS section.");
+            if (DEBUGGING) {
+                System.out.println("[ERROR] Missing DATS or CODS section.");
+            }
             return null;
         }
 
         if (program.getCodeSegment().isEmpty()) {
             realMachine.setSI(5);
-            System.out.println("[ERROR] Code segment is empty.");
+            if (DEBUGGING) {
+                System.out.println("[ERROR] Code segment is empty.");
+            }
             return null;
         }
 
@@ -121,17 +135,26 @@ public class ProgramParser {
     private static String parseDataValue(String line, RealMachine realMachine) {
         line = line.trim();
         if (line.startsWith("DW")) {
-            String[] parts = line.split("\\s+");
-            return parts.length == 2 ? parts[1] : "0";
+            if (line.length() == 2) {
+                return line;
+            } else {
+                String value = line.substring(2).trim();
+                return line;
+            }
+        } else if (line.startsWith("DB")) {
+            String value = line.substring(2).trim();
+            if (value.equalsIgnoreCase("nnnn")) {
+                return line;
+            } else {
+                return line;
+            }
         }
 
-        if (line.startsWith("DB")) {
-            String[] parts = line.split("\\s+", 2);
-            return parts.length == 2 ? parts[1] : "";
-        }
 
         realMachine.setSI(5);
-        System.out.println("[ERROR] Invalid data instruction: " + line);
+        if (DEBUGGING) {
+            System.out.println("[ERROR] Invalid data instruction: " + line);
+        }
         return null;
     }
 

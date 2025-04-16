@@ -9,6 +9,11 @@ import java.util.List;
 import java.util.Scanner;
 
 public class RealMachine {
+
+    public boolean DEBUGGING = true;
+    // enable to perform step by step execution
+    public boolean STEP_BY_STEP = false;
+
     // Data Registers
     public int R1 = 0;
     public int R2 = 0;
@@ -30,19 +35,27 @@ public class RealMachine {
     public boolean SM = false; // Semaphore
     public int DF = 0;
 
-    private List<String> hddPrograms = new ArrayList<>();
     private final File hddFile = new File("hdd.txt");
 
-    //16 SUPERVISORY MEMORY BLOCKS
-    //1 SHARED MEMORY BLOCK
-    //51 USER MEMORY
-    Memory mem = new Memory(1088);
+    // For future MOS, for now it will always remain 0, it is equal to the PTR that each of the VM gets
+    int current_vm_being_processed = 0;
+
+    // CONSTANTS FOR MEMORY DEFINITION:
+    int SUPERVISORY_MEMORY_BLOCKS = 16;
+    int SHARED_MEMORY_BLOCKS      = 1;
+    int VM_BLOCKS                 = 51;
+    int WORDS_IN_A_BLOCK          = 16;
+
+
+
+    Memory memory = new Memory((SUPERVISORY_MEMORY_BLOCKS + SHARED_MEMORY_BLOCKS + VM_BLOCKS) * WORDS_IN_A_BLOCK);
+
+    //Load the channel manager and give it the hdd 'address'
+    private final ChannelManager channelManager = new ChannelManager(this, hddFile);
 
 
 
     public RealMachine() {
-        // Check what programs exist in the hdd already
-        loadProgramList();
     }
 
     public void boot() throws IOException {
@@ -55,8 +68,21 @@ public class RealMachine {
                 case "MOUNT" -> {
                     File flash = new File("C:\\Users\\urbut\\Desktop\\4 kursas\\Operacines sistemos\\Implementations\\Single_Thread_OS_Implementation\\flash.txt");
                     if (flash.exists()) {
+                        //give the channel manager the flash 'address'
+                        channelManager.setFlash(flash);
+                        //Configure channel manager to read from flash(4) and write to HDD(3)
+                        channelManager.setST(4);
+                        channelManager.setDT(3);
                         System.out.println("[SYSTEM] Flash detected. Parsing programs...");
-                            ProgramParser.parseFlash(flash, this);
+                        channelManager.execute(null, -1);
+                        this.test();
+                        executeAllLoadedPrograms();
+                        //Configurre the channel manager to read from HDD(3) to Virtual Memory(1)
+
+                        //channelManager.printLoadedPrograms();
+
+//                        System.out.println("[SYSTEM] Flash detected. Parsing programs...");
+//                            ProgramParser.parseFlash(flash, this);
                     } else {
                         System.out.println("[SYSTEM] flash.txt not found");
                     }
@@ -71,26 +97,81 @@ public class RealMachine {
             }
         }
     }
+    // This method executes all of the programs loaded from flash (the list is held in ChannelManager)
+    public void executeAllLoadedPrograms() throws IOException {
+        for (String programName : channelManager.getLoadedPrograms()) {
+            // count how many VM's are launched(FOR NOW IT WILL ALWAYS BE ONE SO IT CAN REMAIN at id = 0)
+            int current_vm_being_processed = 0;
+            boolean success = memory.allocateMemoryForVM(current_vm_being_processed);
+            // not enough memory
+            if (!success) {
+                System.out.println("[Error] Not enough memory for VM");
+                setSI(6);
+                test();
+                continue;
+            }
+            VirtualMachine currentVM = new VirtualMachine(this, current_vm_being_processed);
 
-//    private void executeProgramsFromHDD() {
-//        System.out.println(hddPrograms.get(1).getName());
-//        if (hddPrograms.isEmpty()) {
-//            System.out.println("No valid programs in HDD.");
-//            return;
-//        }
-//
-//        System.out.println("\n=== Starting program execution ===");
-//        for (Program program : hddPrograms) {
-//            System.out.println("\nRunning program: " + program.getName());
-//
-//            VirtualMachine vm = new VirtualMachine(this);
-//            vm.loadProgram(program);
-//            vm.printMemorySegments();  // vm.run() later + Interrupt checking against the registers
-//        }
-//
-//        System.out.println("\n=== All programs executed ===");
-//    }
+            //interrupt status to check if it should return to the VM or go to another one and execute a new program
+            int interrupt_status = -1;
 
+
+            while (interrupt_status != 0) {
+                // MOVE PROGRAM FROM HDD TO VM MEMORY
+                channelManager.setST(3);
+                channelManager.setDT(1);
+                channelManager.execute(programName, current_vm_being_processed);
+                interrupt_status = test();
+
+                if(DEBUGGING) {
+                   // memory.dump();
+                    memory.dumpMemoryForVM(current_vm_being_processed);
+                }
+                // CURRENTLY THE PROGRAM PARSER GETS CONFUSES BY DW, HAVE TO FIGURE OUT HOW TO STORE CHARS NOT TO OVERLAP WITH HEX NUMBERS ;/
+
+                //execute the program
+
+                currentVM.run(STEP_BY_STEP);
+
+
+                //IMPLEMENT VM EXECUTION OF THE TASKS AND I/O INTERRUPTS
+            }
+
+
+            //clear the memory of the VM once it is done
+            memory.clearMemoryForVM(current_vm_being_processed);
+        }
+    }
+
+    //Interrupt checking and handling function
+    public int test(){
+        if (SI > 0) {
+            switch(SI){
+                // MEMORY ADRESSING OR BAD FORMAT FAULT(NON-RECOVERABLE)
+                case 1:
+                    System.out.println("[SUPERVISORY MODE]: MEMORY ERROR, WRONG ADDRESSING OR BAD FORMAT");
+                    setSI(1);
+                    return 5;
+                //Program parsing interrupt(NON-RECOVERABLE)
+                case 5:
+                    System.out.println("[SUPERVISORY MODE]: PROGRAM PARSING INTERRUPT DETECTED, SKIPPING THE PROGRAM");
+                    setSI(0);
+                    return 5;
+                //Not enough memory left for VM allocation
+                case 6:
+                    System.out.println("[SUPERVISORY MODE]: Not enough memory for a new VM");
+                    setSI(0);
+                    return 0;
+            }
+            //Interrupt was set but not accounted for, terminate
+            return -1;
+        }
+        // Interrupt is not set, return regularly
+        return 0;
+    }
+
+
+// GETTERS/SETTERS---------------------------------------------------------------------------------------------------
     public void setSI(int value) {
         this.SI = value;
     }
@@ -99,91 +180,11 @@ public class RealMachine {
         return SI;
     }
 
-    //Interrupt checking and handling function
-    public int test(){
-        if (SI > 0) {
-            switch(SI){
-                //Program parsing interrupt
-                case 5:
-                    System.out.println("[SUPERVISORY MODE]: PROGRAM PARSING INTERRUPT DETECTED, SKIPPING THE PROGRAM");
-                    setSI(0);
-                    return 5;
-            }
-        }
-        return -1;
+    public Memory getMemory() {
+        return memory;
     }
 
-    //function that loads all the existing program names in the HDD
-    private void loadProgramList() {
-        if (!hddFile.exists()) return;
-        try {
-            List<String> lines = Files.readAllLines(hddFile.toPath());
-            for (int i = 0; i < lines.size(); i++) {
-                if (lines.get(i).trim().equals("$FIL") && i + 1 < lines.size()) {
-                    hddPrograms.add(lines.get(i + 1).trim());
-                }
-            }
-        } catch (IOException e) {
-            System.err.println("Failed to load program list: " + e.getMessage());
-        }
+    public void setMemory(Memory memory) {
+        this.memory = memory;
     }
-
-    // check if the program exists in the HDD
-    public boolean programExists(String name) {
-        return hddPrograms.contains(name);
-    }
-
-    // Delete the current program saved on the hdd and append to end
-    public void overwriteProgram(Program program) {
-        try {
-            List<String> lines = Files.readAllLines(hddFile.toPath());
-            List<String> updated = new ArrayList<>();
-
-            boolean insideTarget = false;
-            for (int i = 0; i < lines.size(); i++) {
-                String line = lines.get(i).trim();
-                if (line.equals("$FIL") && i + 1 < lines.size() && lines.get(i + 1).trim().equals(program.getName())) {
-                    insideTarget = true;
-                    i++; // skip program name
-                    continue;
-                }
-
-                if (insideTarget) {
-                    if (line.equals("$END")) {
-                        insideTarget = false;
-                    }
-                    continue; // skip lines of the old program
-                }
-
-                updated.add(lines.get(i));
-            }
-
-            Files.write(hddFile.toPath(), updated);
-            hddPrograms.remove(program.getName());
-            saveNewProgram(program);
-
-        } catch (IOException e) {
-            System.err.println("[ERROR] Could not overwrite program: " + e.getMessage());
-        }
-    }
-
-    public void saveNewProgram(Program program) {
-        List<String> lines = new ArrayList<>();
-        lines.add("$FIL");
-        lines.add(program.getName());
-        lines.add("DATS");
-        lines.addAll(program.getDataSegment());
-        lines.add("CODS");
-        lines.addAll(program.getCodeSegment());
-        lines.add("$END");
-
-        try {
-            Files.write(hddFile.toPath(), lines, java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
-            hddPrograms.add(program.getName());
-        } catch (IOException e) {
-            System.err.println("[ERROR] Failed to save program to HDD: " + e.getMessage());
-        }
-    }
-
-
 }
