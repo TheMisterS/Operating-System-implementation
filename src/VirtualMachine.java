@@ -4,6 +4,8 @@ public class VirtualMachine {
     public boolean DEBUGGING = true;
     public int CODE_SEGMENT_BLOCK_START = 4;
     private static final int SHARED_BLOCK_INDEX = 17;
+
+
     public int R1 = 0;
     public int R2 = 0;
     public int PC = 0;
@@ -25,6 +27,9 @@ public class VirtualMachine {
         String currentInstruction = fetchInstruction();
         while (!currentInstruction.equals("HALT")) {
             System.out.println("Executing: " + currentInstruction);
+
+            // flag to check if branching happened
+            boolean jumped = false;
 
             currentInstruction = fetchInstruction();
             int x = -1;
@@ -90,7 +95,7 @@ public class VirtualMachine {
                     OR();
                 }
                 break;
-                //PRINT BLOCK X
+                // PRINT BLOCK X
                 case "PR": {
                     if (x >= 0 && x < 4) {
                         int dataSegmentBlock = x;
@@ -99,8 +104,72 @@ public class VirtualMachine {
                         if(DEBUGGING) System.err.println("PRx out of bounds: " + currentInstruction);
                         setInterrupt(1);
                     }
-                    break;
                 }
+                break;
+                // UNCONDITIONAL JUMP
+                case "JM": {
+                    if (x >= CODE_SEGMENT_BLOCK_START && x < 16 && y >= 0 && y < 16) {
+                        int newPC = (x - CODE_SEGMENT_BLOCK_START) * 16 + y;
+                        if (DEBUGGING) System.out.printf("JM: Jumping to PC = %d (Block %d, Offset %d)\n", newPC, x, y);
+                        PC = newPC;
+                        jumped = true; // don't increment PC at end
+                    } else {
+                        if (DEBUGGING) System.err.println("JMxy out of bounds: " + currentInstruction);
+                        setInterrupt(1);
+                    }
+                }
+                break;
+                // JUMP IF R2 > R1 (ABOVE)
+                case "JA": {
+                    if (x >= CODE_SEGMENT_BLOCK_START && x < 16 && y >= 0 && y < 16) {
+                        if (SF[0] == 0 && SF[2] == 0) {
+                            int newPC = (x - CODE_SEGMENT_BLOCK_START) * 16 + y;
+                            if (DEBUGGING) System.out.printf("JA: Jumping to PC = %d (Block %d, Offset %d)\n", newPC, x, y);
+                            PC = newPC;
+                            jumped = true;
+                        } else {
+                            if (DEBUGGING) System.out.println("JA not taken.");
+                        }
+                    } else {
+                        if (DEBUGGING) System.err.println("JAxy out of bounds: " + currentInstruction);
+                        setInterrupt(1);
+                    }
+                }
+                break;
+                // JUMP IF R2 < R1 (BELOW)
+                case "JB": {
+                    if (x >= CODE_SEGMENT_BLOCK_START && x < 16 && y >= 0 && y < 16) {
+                        if (SF[0] == 1) {
+                            int newPC = (x - CODE_SEGMENT_BLOCK_START) * 16 + y;
+                            if (DEBUGGING) System.out.printf("JB taken: Jumping to PC = %d (Block %d, Offset %d)\n", newPC, x, y);
+                            PC = newPC;
+                            jumped = true;
+                        } else {
+                            if (DEBUGGING) System.out.println("JB not taken.");
+                        }
+                    } else {
+                        if (DEBUGGING) System.err.println("JBxy out of bounds: " + currentInstruction);
+                        setInterrupt(1);
+                    }
+                }
+                break;
+                // JUMP IF R2 == R1 (ZERO)
+                case "JZ": {
+                    if (x >= CODE_SEGMENT_BLOCK_START && x < 16 && y >= 0 && y < 16) {
+                        if (SF[2] == 1) {
+                            int newPC = (x - CODE_SEGMENT_BLOCK_START) * 16 + y;
+                            if (DEBUGGING) System.out.printf("JZ taken: Jumping to PC = %d (Block %d, Offset %d)\n", newPC, x, y);
+                            PC = newPC;
+                            jumped = true;
+                        } else {
+                            if (DEBUGGING) System.out.println("JZ not taken.");
+                        }
+                    } else {
+                        if (DEBUGGING) System.err.println("JZxy out of bounds: " + currentInstruction);
+                        setInterrupt(1);
+                    }
+                }
+                break;
             }
 
             opcode = currentInstruction.substring(0, 3);
@@ -145,9 +214,13 @@ public class VirtualMachine {
                     XOR();
                 }
                 break;
+                case "CMP":{
+                    CMP();
+                }
+                break;
             }
 
-            PC++;
+            if (!jumped) PC++;
 
             // Go to supervisory if interrupt happened
             if (realMachine.getSI() != 0) return;
@@ -208,7 +281,7 @@ public class VirtualMachine {
             long unsignedSum = (a & 0xFFFFL) + (b & 0xFFFFL);
             if (unsignedSum > 0xFFFF) SF[0] = 1;
         } else if (op.equals("SUB")) {
-            if ((a & 0xFFFF) < (b & 0xFFFF)) SF[0] = 1; // borrow
+            if (a < b) SF[0] = 1; // borrow
         }
 
         // Overflow for signed operations (same rule applies)
@@ -343,6 +416,19 @@ public class VirtualMachine {
     private void PR(int offset){
         setInterrupt(3);
         realMachine.setPrinterBlockIndex(offset);
+    }
+
+    private void CMP(){
+        int a = R2;
+        int b = R1;
+        int result = a - b;
+
+        // update flags
+        checkInterrupt(a, b, result, "SUB");
+
+        if (DEBUGGING) {
+            System.out.printf("[VM %d] Compared R2 (%d) - R1 (%d) = %d → Flags updated%n", PTR, a, b, result);
+        }
     }
 
     // GETTERS/SETTERS -------------------------------------------------------------------------------------------------

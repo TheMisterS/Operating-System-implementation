@@ -184,10 +184,13 @@ public class ProgramParser {
             return true;
 
         // Load/write shared segment instructions: LLxy, WWxy
-        if (instr.matches("^(LL|WW)[0-9A-F]{2}$"))
+        if (instr.matches("^(LL|WW)[0-9A-F]$"))
             return true;
 
-        // Control flow instructions: JMxy, JAxy, JBxy, JZxy
-        return instr.matches("^(LL|WW)[0-9A-F]$");
+        // conditional/unconditional jumps
+        if (instr.matches("^(JM|JA|JB|JZ)[0-9A-F]{2}$"))
+            return true;
+
+        return false;
     }
 }
