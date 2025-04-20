@@ -50,7 +50,7 @@ public class ChannelManager {
                 if(dataWord == null){
                     this.ST = 0;
                     this.DT = 0;
-                    realMachine.setSI(1);
+                    realMachine.setSI(7);
                     return;
                 }
                 realMachine.getMemory().write(vmID, vBlock, offset, dataWord);

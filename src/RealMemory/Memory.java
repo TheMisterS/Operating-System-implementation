@@ -28,12 +28,12 @@ public class Memory {
         usedBlocks[SHARED_BLOCK_INDEX] = true;
     }
 
-    public void write(int address, String value) {
-        if (address < 0 || address >= memory.length) {
-            throw new IllegalArgumentException("Memory write out of bounds at address: " + address);
-        }
-        memory[address].set(value);
-    }
+//    public void write(int address, String value) {
+//        if (address < 0 || address >= memory.length) {
+//            throw new IllegalArgumentException("Memory write out of bounds at address: " + address);
+//        }
+//        memory[address].set(value);
+//    }
 
     public String read(int address) {
         if (address < 0 || address >= memory.length) {
@@ -145,6 +145,13 @@ public class Memory {
                 System.out.print(memory[physicalBlock * BLOCK_SIZE + i].get() + " ");
             }
             System.out.println();
+        }
+    }
+
+    public void dumpSharedMemory() {
+        System.out.println("[Memory] Dumping shared memory block:");
+        for (int i = 0; i < BLOCK_SIZE; i++) {
+            System.out.printf("[Shared %02d]: %s\n", i, memory[SHARED_BLOCK_INDEX * BLOCK_SIZE + i].get());
         }
     }
 }

@@ -12,7 +12,8 @@ public class RealMachine {
 
     public boolean DEBUGGING = true;
     // enable to perform step by step execution
-    public boolean STEP_BY_STEP = false;
+    public boolean STEP_BY_STEP = true;
+    public boolean OVERFLOW_IS_RECOVERABLE = true;
 
     // Data Registers
     public int R1 = 0;
@@ -39,6 +40,9 @@ public class RealMachine {
 
     // For future MOS, for now it will always remain 0, it is equal to the PTR that each of the VM gets
     int current_vm_being_processed = 0;
+
+    //pass which data segment block to print
+    int printerBlockIndex = 0;
 
     // CONSTANTS FOR MEMORY DEFINITION:
     int SUPERVISORY_MEMORY_BLOCKS = 16;
@@ -112,26 +116,67 @@ public class RealMachine {
             }
             VirtualMachine currentVM = new VirtualMachine(this, current_vm_being_processed);
 
-            //interrupt status to check if it should return to the VM or go to another one and execute a new program
+            //interrupt status to check if it should return to the VM or go to another one and execute a new program and load program for the first time
             int interrupt_status = -1;
 
 
             while (interrupt_status != 0) {
                 // MOVE PROGRAM FROM HDD TO VM MEMORY
-                channelManager.setST(3);
-                channelManager.setDT(1);
-                channelManager.execute(programName, current_vm_being_processed);
-                interrupt_status = test();
-
-                if(DEBUGGING) {
-                   // memory.dump();
-                    memory.dumpMemoryForVM(current_vm_being_processed);
+                if(interrupt_status == -1) {
+                    channelManager.setST(3);
+                    channelManager.setDT(1);
+                    channelManager.execute(programName, current_vm_being_processed);
+                    interrupt_status = test();
+                    //Channel manager interrupts/errors are non-recoverable -> go to next program
+                    if (interrupt_status != 0){
+                        break;
+                    }
                 }
-                // CURRENTLY THE PROGRAM PARSER GETS CONFUSES BY DW, HAVE TO FIGURE OUT HOW TO STORE CHARS NOT TO OVERLAP WITH HEX NUMBERS ;/
+
+                // STEP-BY-STEP INTERRUPT HANDLING
+                if(interrupt_status == 999){
+                    Scanner scanner = new Scanner(System.in);
+                    String input = "";
+                    while (true) {
+                        System.out.println("[STEP-BY-STEP-MODE]: SELECT AN OPTION -> A) VM REGISTER VALUES B) UPCOMING INSTRUCTION C) DUMP OF PAGE TABLE D) DUMP OF SHARED MEMORY E) DUMP ALL MEMORY X) EXIT");
+                        input = scanner.nextLine().trim().toUpperCase();
+                        switch (input) {
+                            case "A":
+                                currentVM.printRegisterValues();
+                                continue;
+                            case "B":
+                                System.out.println("UPCOMING INSTRUCTION -> WIP!!!");
+                                continue;
+                            case "C":
+                                memory.dumpMemoryForVM(current_vm_being_processed);
+                                continue;
+                            case "D":
+                                memory.dumpSharedMemory();
+                                continue;
+                            case "E":
+                                memory.dump();
+                                continue;
+                            case "X":
+                                break;
+                            default:
+                                System.out.println("Invalid input. Please enter A, B, C or X.");
+                                continue;
+                        }
+                        break; // Exit loop after valid input is handled
+                    }
+                }
+
+
+
 
                 //execute the program
-
                 currentVM.run(STEP_BY_STEP);
+                interrupt_status = test();
+
+                //Check if unrecoverable interrupt happened and it is not step-by-step
+                if (interrupt_status < 0 && interrupt_status != 999){
+                    break;
+                }
 
 
                 //IMPLEMENT VM EXECUTION OF THE TASKS AND I/O INTERRUPTS
@@ -143,25 +188,49 @@ public class RealMachine {
         }
     }
 
-    //Interrupt checking and handling function
+    //Interrupt checking and handling function ( return < 0 -> UNRECOVERABLE INTERRUPT, return == 1 -> HALT)
     public int test(){
         if (SI > 0) {
             switch(SI){
                 // MEMORY ADRESSING OR BAD FORMAT FAULT(NON-RECOVERABLE)
                 case 1:
-                    System.out.println("[SUPERVISORY MODE]: MEMORY ERROR, WRONG ADDRESSING OR BAD FORMAT");
-                    setSI(1);
-                    return 5;
+                // HALT
+                    System.out.println("[SUPERVISORY MODE]: HALT DETECTED, EXITING VM");
+                    setSI(0);
+                    return 0;
+                case 2:
+                //OPCODE/HEX VALUE interrupt(NON-RECOVERABLE)
+                    System.out.println("[SUPERVISORY MODE]: Wrong opcode or wrong value retrieved");
+                    setSI(0);
+                    return -2;
+                case 3:
+                // PRINTER ACTIVATION (PR)
+                case 4:
+                //OVERFLOW INTERRUPT, optionally recoverrable
+                    System.out.println("[SUPERVISORY MODE]: Overflow interrupt");
+                    setSI(0);
+                    // RECOVERABLE
+                    if (OVERFLOW_IS_RECOVERABLE) return 4;
+                    //NON-RECOVERABLE
+                    return -4;
                 //Program parsing interrupt(NON-RECOVERABLE)
                 case 5:
                     System.out.println("[SUPERVISORY MODE]: PROGRAM PARSING INTERRUPT DETECTED, SKIPPING THE PROGRAM");
                     setSI(0);
-                    return 5;
+                    return -5;
                 //Not enough memory left for VM allocation
                 case 6:
                     System.out.println("[SUPERVISORY MODE]: Not enough memory for a new VM");
                     setSI(0);
-                    return 0;
+                    return -6;
+                case 7:
+                    System.out.println("[SUPERVISORY MODE]: MEMORY ERROR, WRONG ADDRESSING OR BAD FORMAT");
+                    setSI(0);
+                    return -7;
+                //STEP-BY-STEP MODE
+                case 999:
+                    setSI(0);
+                    return 999;
             }
             //Interrupt was set but not accounted for, terminate
             return -1;
@@ -186,5 +255,93 @@ public class RealMachine {
 
     public void setMemory(Memory memory) {
         this.memory = memory;
+    }
+
+    public int getR1() {
+        return R1;
+    }
+
+    public void setR1(int r1) {
+        R1 = r1;
+    }
+
+    public int getR2() {
+        return R2;
+    }
+
+    public void setR2(int r2) {
+        R2 = r2;
+    }
+
+    public int getPTBR() {
+        return PTBR;
+    }
+
+    public void setPTBR(int PTBR) {
+        this.PTBR = PTBR;
+    }
+
+    public int getDSR() {
+        return DSR;
+    }
+
+    public void setDSR(int DSR) {
+        this.DSR = DSR;
+    }
+
+    public int getPC() {
+        return PC;
+    }
+
+    public void setPC(int PC) {
+        this.PC = PC;
+    }
+
+    public int getCS() {
+        return CS;
+    }
+
+    public void setCS(int CS) {
+        this.CS = CS;
+    }
+
+    public int getDS() {
+        return DS;
+    }
+
+    public void setDS(int DS) {
+        this.DS = DS;
+    }
+
+    public int getTR() {
+        return TR;
+    }
+
+    public void setTR(int TR) {
+        this.TR = TR;
+    }
+
+    public int getPI() {
+        return PI;
+    }
+
+    public void setPI(int PI) {
+        this.PI = PI;
+    }
+
+    public int[] getSF() {
+        return SF;
+    }
+
+    public void setSF(int[] SF) {
+        this.SF = SF;
+    }
+
+    public int getPrinterBlockIndex() {
+        return printerBlockIndex;
+    }
+
+    public void setPrinterBlockIndex(int printerBlockIndex) {
+        this.printerBlockIndex = printerBlockIndex;
     }
 }

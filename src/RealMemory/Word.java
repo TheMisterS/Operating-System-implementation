@@ -16,7 +16,13 @@ public class Word {
             throw new IllegalArgumentException("Byte value must be at most 4 characters.");
         }
         // Pad to 4 chars
-        this.value = String.format("%-4s", val).replace(' ', '0');
+        if (val.matches("\\d+")) {
+            // val is numeric → pad with leading 0
+            this.value = String.format("%4s", val).replace(' ', '0');
+        } else {
+            // val is non-numeric → pad with trailing 0
+            this.value = String.format("%-4s", val).replace(' ', '0');
+        }
     }
 
     @Override

@@ -28,7 +28,8 @@ public class ProgramParser {
 
                 if (end >= lines.size()) {
                     realMachine.setSI(5);
-                    //System.out.println("[ERROR] Missing $END for program starting at line " + start);
+                    if (DEBUGGING)
+                        System.out.println("[ERROR] Missing $END for program starting at line " + start);
                     return;
                 }
 
@@ -37,14 +38,14 @@ public class ProgramParser {
                 if (program != null) {
                     if (channelManager.programExists(program.getName())) {
                         channelManager.overwriteProgram(program);
-                        if (DEBUGGING) {
+                        if (DEBUGGING)
                             System.out.println("[INFO] Overwrote program: " + program.getName());
-                        }
+
                     } else {
                         channelManager.saveNewProgram(program);
-                        if (DEBUGGING) {
+                        if (DEBUGGING)
                             System.out.println("[INFO] Saved program: " + program.getName());
-                        }
+
                     }
                 }
 
@@ -58,18 +59,18 @@ public class ProgramParser {
     public static Program parseProgramBlock(List<String> lines, RealMachine realMachine) {
         if (lines.size() < 5 || !lines.get(0).equals("$FIL")) {
             realMachine.setSI(5);
-            if (DEBUGGING) {
+            if (DEBUGGING)
                 System.out.println("[ERROR] Program must start with $FIL header.");
-            }
+
             return null;
         }
 
         String programName = lines.get(1).trim();
         if (programName.isEmpty()) {
             realMachine.setSI(5);
-            if (DEBUGGING) {
+            if (DEBUGGING)
                 System.out.println("[ERROR] Program name is missing.");
-            }
+
             return null;
         }
 
@@ -115,17 +116,17 @@ public class ProgramParser {
 
         if (!foundData || !foundCode) {
             realMachine.setSI(5);
-            if (DEBUGGING) {
+            if (DEBUGGING)
                 System.out.println("[ERROR] Missing DATS or CODS section.");
-            }
+
             return null;
         }
 
         if (program.getCodeSegment().isEmpty()) {
             realMachine.setSI(5);
-            if (DEBUGGING) {
+            if (DEBUGGING)
                 System.out.println("[ERROR] Code segment is empty.");
-            }
+
             return null;
         }
 
@@ -152,9 +153,9 @@ public class ProgramParser {
 
 
         realMachine.setSI(5);
-        if (DEBUGGING) {
+        if (DEBUGGING)
             System.out.println("[ERROR] Invalid data instruction: " + line);
-        }
+
         return null;
     }
 
@@ -182,7 +183,7 @@ public class ProgramParser {
             return true;
 
         // Control flow instructions: JMxy, JAxy, JBxy, JZxy
-        if (instr.matches("^(JM|JA|JB|JZ)[0-9A-F]{2}$"))
+        if (instr.matches("^(LL|WW)[0-9A-F]$"))
             return true;
 
         return false;
