@@ -6,9 +6,6 @@ public class Program {
     private List<String> codeSegment = new ArrayList<>();
     private String name = "";
 
-
-
-
     public void setName(String name) {
         this.name = name.trim();
     }

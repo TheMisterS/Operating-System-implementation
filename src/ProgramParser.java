@@ -5,12 +5,15 @@ import java.util.*;
 
 public class ProgramParser {
     static boolean DEBUGGING = true;
+
+    //SET OF INSTRUCTIONS WITHOUT X OR Y
     private static final Set<String> SIMPLE_INSTRUCTIONS = Set.of(
             "ADD", "SUB", "MUL", "DIV", "CMP",
             "AND", "OR", "XOR", "XCG",
             "MOV", "HALT"
     );
 
+    //PARSE FLASH, FIND PROGRAM, CHECK SYNTAX AND WRITE TO HDD
     public static void parseFlash(File flash, RealMachine realMachine, ChannelManager channelManager) throws IOException {
         List<String> lines = Files.readAllLines(flash.toPath());
         int i = 0;
@@ -33,6 +36,7 @@ public class ProgramParser {
                     return;
                 }
 
+                //PARSE PROGRAM AND CHECK SYNTAX, WRITE/OVERWRITE VALID PROGRAMS TO HDD, SKIP OTHERS
                 List<String> programLines = lines.subList(start, end + 1);
                 Program program = parseProgramBlock(programLines, realMachine);
                 if (program != null) {
@@ -48,7 +52,6 @@ public class ProgramParser {
 
                     }
                 }
-
                 i = end + 1;
             } else {
                 i++;
@@ -56,6 +59,7 @@ public class ProgramParser {
         }
     }
 
+    //CHECK PROGRAM STRUCTURE AND SYNTAX
     public static Program parseProgramBlock(List<String> lines, RealMachine realMachine) {
         if (lines.size() < 5 || !lines.get(0).equals("$FIL")) {
             realMachine.setSI(5);
@@ -133,6 +137,7 @@ public class ProgramParser {
         return program;
     }
 
+    //PARSE DATA SEGMENT
     private static String parseDataValue(String line, RealMachine realMachine) {
         line = line.trim();
         if (line.startsWith("DW")) {
@@ -151,7 +156,6 @@ public class ProgramParser {
             }
         }
 
-
         realMachine.setSI(5);
         if (DEBUGGING)
             System.out.println("[ERROR] Invalid data instruction: " + line);
@@ -159,6 +163,7 @@ public class ProgramParser {
         return null;
     }
 
+    //CHECK IF VALID INSTRUCTION IN CODE SEGMENT
     private static boolean isValidInstruction(String instr) {
         instr = instr.trim().toUpperCase();
 
@@ -183,9 +188,6 @@ public class ProgramParser {
             return true;
 
         // Control flow instructions: JMxy, JAxy, JBxy, JZxy
-        if (instr.matches("^(LL|WW)[0-9A-F]$"))
-            return true;
-
-        return false;
+        return instr.matches("^(LL|WW)[0-9A-F]$");
     }
 }

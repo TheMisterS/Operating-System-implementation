@@ -50,16 +50,13 @@ public class RealMachine {
     int VM_BLOCKS                 = 51;
     int WORDS_IN_A_BLOCK          = 16;
 
-
-
     Memory memory = new Memory((SUPERVISORY_MEMORY_BLOCKS + SHARED_MEMORY_BLOCKS + VM_BLOCKS) * WORDS_IN_A_BLOCK);
 
     //Load the channel manager and give it the hdd 'address'
     private final ChannelManager channelManager = new ChannelManager(this, hddFile);
 
-
-
     public RealMachine() {
+
     }
 
     public void boot() throws IOException {
@@ -81,12 +78,6 @@ public class RealMachine {
                         channelManager.execute(null, -1);
                         this.test();
                         executeAllLoadedPrograms();
-                        //Configurre the channel manager to read from HDD(3) to Virtual Memory(1)
-
-                        //channelManager.printLoadedPrograms();
-
-//                        System.out.println("[SYSTEM] Flash detected. Parsing programs...");
-//                            ProgramParser.parseFlash(flash, this);
                     } else {
                         System.out.println("[SYSTEM] flash.txt not found");
                     }
@@ -101,11 +92,11 @@ public class RealMachine {
             }
         }
     }
-    // This method executes all of the programs loaded from flash (the list is held in ChannelManager)
+    // This method executes all the programs loaded from flash (the list is held in ChannelManager)
     public void executeAllLoadedPrograms() throws IOException {
         for (String programName : channelManager.getLoadedPrograms()) {
-            // count how many VM's are launched(FOR NOW IT WILL ALWAYS BE ONE SO IT CAN REMAIN at id = 0)
-            int current_vm_being_processed = 0;
+            // count how many VMs are launched(FOR NOW IT WILL ALWAYS BE ONE SO IT CAN REMAIN at id = 0)
+            current_vm_being_processed = 0;
             boolean success = memory.allocateMemoryForVM(current_vm_being_processed);
             // not enough memory
             if (!success) {
@@ -118,7 +109,6 @@ public class RealMachine {
 
             //interrupt status to check if it should return to the VM or go to another one and execute a new program and load program for the first time
             int interrupt_status = -1;
-
 
             while (interrupt_status != 0) {
                 // MOVE PROGRAM FROM HDD TO VM MEMORY
@@ -162,12 +152,9 @@ public class RealMachine {
                                 System.out.println("Invalid input. Please enter A, B, C or X.");
                                 continue;
                         }
-                        break; // Exit loop after valid input is handled
+                        break;
                     }
                 }
-
-
-
 
                 //execute the program
                 currentVM.run(STEP_BY_STEP);
@@ -177,62 +164,62 @@ public class RealMachine {
                 if (interrupt_status < 0 && interrupt_status != 999){
                     break;
                 }
-
-
-                //IMPLEMENT VM EXECUTION OF THE TASKS AND I/O INTERRUPTS
             }
-
-
             //clear the memory of the VM once it is done
             memory.clearMemoryForVM(current_vm_being_processed);
         }
     }
 
     //Interrupt checking and handling function ( return < 0 -> UNRECOVERABLE INTERRUPT, return == 1 -> HALT)
-    public int test(){
+    public int test() throws IOException {
         if (SI > 0) {
             switch(SI){
-                // MEMORY ADRESSING OR BAD FORMAT FAULT(NON-RECOVERABLE)
                 case 1:
                 // HALT
                     System.out.println("[SUPERVISORY MODE]: HALT DETECTED, EXITING VM");
                     setSI(0);
                     return 0;
                 case 2:
-                //OPCODE/HEX VALUE interrupt(NON-RECOVERABLE)
-                    System.out.println("[SUPERVISORY MODE]: Wrong opcode or wrong value retrieved");
+                // OPCODE/HEX VALUE interrupt(NON-RECOVERABLE)
+                    System.out.println("[SUPERVISORY MODE]: WRONG OPCODE OR VALUE RETRIEVED");
                     setSI(0);
                     return -2;
                 case 3:
-                // PRINTER ACTIVATION (PR)
+                // PRINTING INTERRUPT
+                    System.out.println("[SUPERVISORY MODE]: PRINT INTERRUPT INVOKED WITH BLOCK: " + this.printerBlockIndex);
+                    channelManager.setST(1);
+                    channelManager.setDT(4);
+                    channelManager.execute(null, this.current_vm_being_processed);
+                    setSI(0);
+                    return 3;
                 case 4:
-                //OVERFLOW INTERRUPT, optionally recoverrable
+                // OVERFLOW INTERRUPT, optionally recoverrable
                     System.out.println("[SUPERVISORY MODE]: Overflow interrupt");
                     setSI(0);
                     // RECOVERABLE
                     if (OVERFLOW_IS_RECOVERABLE) return 4;
                     //NON-RECOVERABLE
                     return -4;
-                //Program parsing interrupt(NON-RECOVERABLE)
+                // Program parsing interrupt(NON-RECOVERABLE)
                 case 5:
                     System.out.println("[SUPERVISORY MODE]: PROGRAM PARSING INTERRUPT DETECTED, SKIPPING THE PROGRAM");
                     setSI(0);
                     return -5;
-                //Not enough memory left for VM allocation
+                // Not enough memory left for VM allocation(NON-RECOVERABLE)
                 case 6:
-                    System.out.println("[SUPERVISORY MODE]: Not enough memory for a new VM");
+                    System.out.println("[SUPERVISORY MODE]: NOT ENOUGH MEMORY FOR NEW VM");
                     setSI(0);
                     return -6;
                 case 7:
                     System.out.println("[SUPERVISORY MODE]: MEMORY ERROR, WRONG ADDRESSING OR BAD FORMAT");
                     setSI(0);
                     return -7;
-                //STEP-BY-STEP MODE
+                // STEP-BY-STEP MODE
                 case 999:
                     setSI(0);
                     return 999;
             }
-            //Interrupt was set but not accounted for, terminate
+            // Interrupt was set but not accounted for, terminate
             return -1;
         }
         // Interrupt is not set, return regularly
@@ -343,5 +330,9 @@ public class RealMachine {
 
     public void setPrinterBlockIndex(int printerBlockIndex) {
         this.printerBlockIndex = printerBlockIndex;
+    }
+
+    public int getCurrent_vm_being_processed() {
+        return current_vm_being_processed;
     }
 }

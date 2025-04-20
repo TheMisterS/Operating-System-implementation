@@ -13,15 +13,14 @@ public class VirtualMachine {
     // This will be the vmID or the PTR -> address o this VM's page table
     public int PTR = 0;
 
-
-    private RealMachine realMachine;
-
+    private final RealMachine realMachine;
 
     public VirtualMachine(RealMachine realMachine, int PTR) {
         this.realMachine = realMachine;
         this.PTR = PTR;
     }
 
+    //EXECUTE THE PROGRAM WITH OPTIONAL STEP_BY_STEP INTERRUPT
     public void run(boolean stepByStepStatus) {
         String currentInstruction = fetchInstruction();
         while (!currentInstruction.equals("HALT")) {
@@ -36,7 +35,7 @@ public class VirtualMachine {
             x = Character.digit(currentInstruction.charAt(2), 16);
             y = Character.digit(currentInstruction.charAt(3), 16);
 
-            // TWO DIGIT OPERATIONS
+            //CHECK FOR 2-CHAR-LONG INSTRUCTIONS
             switch (opcode) {
                 // LOAD FROM VM MEMORY AT XY TO R1
                 case "LB": {
@@ -51,6 +50,7 @@ public class VirtualMachine {
                     }
                     break;
                 }
+                // LOAD FROM R1 TO MEMORY AT XY
                 case "LW": {
                     if (x >= 0 && x < 4 && y >= 0 && y < 16) {
                         int virtualBlock = x; // Data segment is from block 0–3
@@ -62,7 +62,7 @@ public class VirtualMachine {
                     }
                     break;
                 }
-                // Write to shared block
+                // WRITE TO SHARED BLOCK FROM R1
                 case "WW": {
                     if (x >= 0 && x < 16) {
                         int wordOffset = x;
@@ -73,7 +73,7 @@ public class VirtualMachine {
                     }
                     break;
                 }
-
+                // LOAD FROM SHARED BLOCK TO R1
                 case "LL": {
                     if (x >= 0 && x < 16) {
                         int wordOffset = x;
@@ -90,6 +90,7 @@ public class VirtualMachine {
                     OR();
                 }
                 break;
+                //PRINT BLOCK X
                 case "PR": {
                     if (x >= 0 && x < 4) {
                         int dataSegmentBlock = x;
@@ -103,7 +104,7 @@ public class VirtualMachine {
             }
 
             opcode = currentInstruction.substring(0, 3);
-
+            //CHECK FOR 3-CHAR-LONG INSTRUCTIONS
             switch (opcode){
                 // Exchange the registers
                 case "XCG": {
@@ -151,7 +152,7 @@ public class VirtualMachine {
             // Go to supervisory if interrupt happened
             if (realMachine.getSI() != 0) return;
 
-            //Go to supervisory if step_by_step is set
+            // Go to supervisory if step_by_step is set
             if (stepByStepStatus) {
                 setInterrupt(999);
                 return;
@@ -228,7 +229,7 @@ public class VirtualMachine {
         return (SF[1] == 1) ? 4 : 0;
     }
 
-    // INSTRUCTION FUNCTIONS-----------------------------------------------------------------------------------------
+ // INSTRUCTION FUNCTIONS-----------------------------------------------------------------------------------------
 
     private void XCG () {
         realMachine.setR1(this.R2);
@@ -288,7 +289,7 @@ public class VirtualMachine {
         int b = R1;
         int result = a * b;
 
-        int interruptCode = checkInterrupt(0, 0, result, "MUL");; // carry doesn’t apply to MUL
+        int interruptCode = checkInterrupt(0, 0, result, "MUL");// carry doesn’t apply to MUL
 
         int wrapped = result & 0xFFFF;
         if (wrapped >= 0x8000) wrapped -= 0x10000;
@@ -343,9 +344,6 @@ public class VirtualMachine {
         setInterrupt(3);
         realMachine.setPrinterBlockIndex(offset);
     }
-
-
-
 
     // GETTERS/SETTERS -------------------------------------------------------------------------------------------------
     public int getR1() {

@@ -1,4 +1,6 @@
+import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -24,7 +26,7 @@ public class ChannelManager {
     private Set<String> loadedPrograms = new HashSet<>();
 
 
-    private RealMachine realMachine;
+    private final RealMachine realMachine;
 
 
     public void execute(String programName, int vmID) throws IOException {
@@ -34,10 +36,12 @@ public class ChannelManager {
             ProgramParser.parseFlash(this.flash, realMachine, this);
             //IF INTERRUPT HAPPENED, RETURN
             if(realMachine.getSI() != 0){
+                resetTheRegisters();
                 return;
             }
         }
-        if(this.ST == 3 && DT == 1){
+        //HDD TO VM
+        if(this.ST == 3 && this.DT == 1){
             //vmID = PTR
             //LOAD DESIRED PROGRAM FROM HDD
             Program currentProgram = transferProgramFromHDD(programName);
@@ -48,8 +52,7 @@ public class ChannelManager {
                 int offset = wordIndex % 16;
                 dataWord  = parseDataSegment(dataWord);
                 if(dataWord == null){
-                    this.ST = 0;
-                    this.DT = 0;
+                    resetTheRegisters();
                     realMachine.setSI(7);
                     return;
                 }
@@ -73,10 +76,28 @@ public class ChannelManager {
             }
         }
 
+        // VM TO PRINTER
+        if(this.ST == 1 && this.DT ==4){
+            int block = realMachine.getPrinterBlockIndex();
+
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter("printer.txt", true))) {
+                for (int i = 0; i < 16; i++) {
+                    String word = realMachine.getMemory().read(vmID, block, i);
+                    if ("nnnn".equalsIgnoreCase(word)) {
+                        writer.newLine();
+                    } else {
+                        writer.write(word + " ");
+                    }
+                }
+                writer.newLine(); // Separate each print block
+                if (DEBUGGING) System.out.println("[CHANNEL MANAGER] Block " + block + " printed to printer.txt");
+
+            } catch (IOException e) {
+                System.err.println("[CHANNEL MANAGER] Error writing to printer.txt: " + e.getMessage());
+            }
+        }
         //Reset the registers
-        this.ST = 0;
-        this.DT = 0;
-        return;
+        resetTheRegisters();
     }
 
     //function that loads all the existing program names in the HDD(helper function)
@@ -209,6 +230,11 @@ public class ChannelManager {
             System.out.println("[ERROR] Program " + programName + " not found in HDD.");
         }
         return null;
+    }
+
+    private void resetTheRegisters(){
+        this.ST = 0;
+        this.DT = 0;
     }
     //CONSTRUCTORS AND GETTERS/SETTERS-----------------------------------------------------------------------------
     public ChannelManager(RealMachine realMachine, File hdd) {

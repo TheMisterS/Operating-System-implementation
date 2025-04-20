@@ -28,19 +28,6 @@ public class Memory {
         usedBlocks[SHARED_BLOCK_INDEX] = true;
     }
 
-//    public void write(int address, String value) {
-//        if (address < 0 || address >= memory.length) {
-//            throw new IllegalArgumentException("Memory write out of bounds at address: " + address);
-//        }
-//        memory[address].set(value);
-//    }
-
-    public String read(int address) {
-        if (address < 0 || address >= memory.length) {
-            throw new IllegalArgumentException("Memory read out of bounds at address: " + address);
-        }
-        return memory[address].get();
-    }
    // DUMP THE WHOLE MEMORY
     public void dump() {
         for (int i = 0; i < memory.length; i++) {
@@ -51,7 +38,8 @@ public class Memory {
     public int size() {
         return memory.length;
     }
-   //RANDOM BLOCK ALLOCATION FOR VM
+
+   // RANDOM BLOCK ALLOCATION FOR VM
     public boolean allocateMemoryForVM(int vmId) {
         // Count how many user-allocatable blocks are free (blocks 18 to 67)
         int freeCount = 0;
@@ -68,7 +56,7 @@ public class Memory {
         int allocated = 0;
         while (allocated < VM_BLOCKS) {
             int block = random.nextInt(TOTAL_BLOCKS);
-            //Check if the block is not used and is available for VM use
+            // Check if the block is not used and is available for VM use
             if (!usedBlocks[block] && block > 17) {
                 usedBlocks[block] = true;
                 pageTable[allocated] = block;

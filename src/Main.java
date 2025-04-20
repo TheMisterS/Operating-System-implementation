@@ -5,7 +5,6 @@
  *
  * */
 
-import java.io.File;
 import java.io.IOException;
 
 public class Main {
@@ -13,5 +12,4 @@ public class Main {
         RealMachine os = new RealMachine();
         os.boot();
     }
-
 }
